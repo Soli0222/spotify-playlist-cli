@@ -1,0 +1,51 @@
+{
+  $schema: 'https://docs.renovatebot.com/renovate-schema.json',
+  extends: [
+    'config:recommended',
+  ],
+  timezone: 'Asia/Tokyo',
+  assignees: [
+    'Soli0222',
+  ],
+  prConcurrentLimit: 10,
+  prHourlyLimit: 20,
+  rangeStrategy: 'bump',
+  automerge: true,
+  automergeType: 'pr',
+  platformAutomerge: true,
+  packageRules: [
+    {
+      groupName: 'CLI framework (cobra)',
+      matchPackageNames: [
+        '/^github\\.com/spf13//',
+      ],
+      automerge: true,
+    },
+    {
+      groupName: 'Go toolchain',
+      matchManagers: [
+        'gomod',
+      ],
+      matchDepTypes: [
+        'golang',
+      ],
+      automerge: true,
+      semanticCommitType: 'fix',
+    },
+    {
+      matchManagers: [
+        'gomod',
+      ],
+      commitMessageTopic: 'Go {{depName}}',
+      semanticCommitType: 'fix',
+      automerge: true,
+    },
+    {
+      groupName: 'GitHub Actions',
+      matchManagers: [
+        'github-actions',
+      ],
+      automerge: true,
+    },
+  ],
+}

@@ -1,0 +1,62 @@
+name: Weekly Auto Release
+
+on:
+  schedule:
+    # Every Sunday at 22:00 UTC (07:00 JST)
+    - cron: '0 22 * * 6'
+  workflow_dispatch:
+
+jobs:
+  auto-merge-release-pr:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7.0.1
+
+      - name: Generate GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@v3.3.0
+        with:
+          client-id: ${{ secrets.RENOVATE_CLIENT_ID }}
+          private-key: ${{ secrets.RENOVATE_PRIVATE_KEY }}
+
+      - name: Find pending release-please PR
+        id: find-pr
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          pr_number=$(gh pr list --repo "$GITHUB_REPOSITORY" --label "autorelease: pending" --state open --json number --jq '.[0].number // empty')
+          if [ -z "$pr_number" ]; then
+            echo "No pending release-please PR found. Nothing to do."
+            echo "pr_number=" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "Found pending release-please PR #$pr_number"
+          echo "pr_number=$pr_number" >> "$GITHUB_OUTPUT"
+
+      # The release PR is now authored using the GitHub App token, so it
+      # gets normal CI runs on it (no more action_required approval gating).
+      # Wait for its checks to finish and merge only if they are green.
+      - name: Merge release PR
+        id: merge-pr
+        if: ${{ steps.find-pr.outputs.pr_number != '' }}
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          pr_number="${{ steps.find-pr.outputs.pr_number }}"
+
+          if ! output=$(gh pr checks "$pr_number" --repo "$GITHUB_REPOSITORY" --watch --fail-fast 2>&1); then
+            if echo "$output" | grep -qi "no checks reported"; then
+              echo "No checks on PR #$pr_number, proceeding to merge"
+            else
+              echo "$output"
+              echo "Checks failed for PR #$pr_number, aborting"
+              exit 1
+            fi
+          fi
+
+          echo "Checks succeeded, merging PR #$pr_number"
+          gh pr merge "$pr_number" --repo "$GITHUB_REPOSITORY" --squash

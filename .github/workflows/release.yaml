@@ -1,0 +1,51 @@
+name: goreleaser
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing published release tag to publish binaries for'
+        required: true
+        type: string
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  goreleaser:
+    runs-on: ubuntu-latest
+    env:
+      GORELEASER_CURRENT_TAG: ${{ inputs.tag || github.ref_name }}
+    steps:
+      - name: Validate published release
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view "$GORELEASER_CURRENT_TAG" --repo "$GITHUB_REPOSITORY" \
+            --json isDraft --jq 'if .isDraft then error("Release is a draft") else "Published release exists" end'
+      - name: Checkout
+        uses: actions/checkout@v7.0.1
+        with:
+          fetch-depth: 0
+          ref: refs/tags/${{ inputs.tag || github.ref_name }}
+
+      - name: Set up Go
+        uses: actions/setup-go@v7.0.0
+        with:
+          go-version-file: 'go.mod'
+          cache: true
+
+      - name: Run GoReleaser
+        uses: goreleaser/goreleaser-action@v7.3.0
+        with:
+          # either 'goreleaser' (default) or 'goreleaser-pro'
+          distribution: goreleaser
+          # 'latest', 'nightly', or a semver
+          version: '~> v2'
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
